@@ -11,12 +11,11 @@ import meteordevelopment.meteorclient.systems.hud.HudElement;
 import meteordevelopment.meteorclient.systems.hud.HudElementInfo;
 import meteordevelopment.meteorclient.systems.hud.HudRenderer;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
-import meteordevelopment.meteorclient.utils.render.DisplayItemUtils;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 
 public class ItemHud extends HudElement {
     public static final HudElementInfo<ItemHud> INFO = new HudElementInfo<>(Hud.GROUP, "item", "Displays the item count.", ItemHud::new);
@@ -47,7 +46,7 @@ public class ItemHud extends HudElement {
         .name("custom-scale")
         .description("Applies a custom scale to this hud element.")
         .defaultValue(false)
-        .onChanged(_ -> calculateSize())
+        .onChanged(aBoolean -> calculateSize())
         .build()
     );
 
@@ -56,7 +55,7 @@ public class ItemHud extends HudElement {
         .description("Custom scale.")
         .visible(customScale::get)
         .defaultValue(2)
-        .onChanged(_ -> calculateSize())
+        .onChanged(aDouble -> calculateSize())
         .min(0.5)
         .sliderRange(0.5, 3)
         .build()
@@ -91,7 +90,7 @@ public class ItemHud extends HudElement {
 
     @Override
     public void render(HudRenderer renderer) {
-        ItemStack itemStack = DisplayItemUtils.toStack(item.get(), InvUtils.find(item.get()).count());
+        ItemStack itemStack = new ItemStack(item.get(), InvUtils.find(item.get()).count());
 
         if (noneMode.get() == NoneMode.HideItem && itemStack.isEmpty()) {
             if (isInEditor()) {

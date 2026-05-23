@@ -13,12 +13,11 @@ import meteordevelopment.meteorclient.gui.widgets.input.WIntEdit;
 import meteordevelopment.meteorclient.gui.widgets.input.WTextBox;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.utils.misc.Names;
-import meteordevelopment.meteorclient.utils.render.DisplayItemUtils;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.world.effect.MobEffect;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.item.alchemy.PotionContents;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.PotionContentsComponent;
+import net.minecraft.entity.effect.StatusEffect;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import org.apache.commons.lang3.Strings;
 
 import java.util.ArrayList;
@@ -27,13 +26,13 @@ import java.util.List;
 import java.util.Optional;
 
 public class StatusEffectAmplifierMapSettingScreen extends WindowScreen {
-    private final Setting<Reference2IntMap<MobEffect>> setting;
+    private final Setting<Reference2IntMap<StatusEffect>> setting;
 
     private WTable table;
 
     private String filterText = "";
 
-    public StatusEffectAmplifierMapSettingScreen(GuiTheme theme, Setting<Reference2IntMap<MobEffect>> setting) {
+    public StatusEffectAmplifierMapSettingScreen(GuiTheme theme, Setting<Reference2IntMap<StatusEffect>> setting) {
         super(theme, "Modify Amplifiers");
 
         this.setting = setting;
@@ -56,10 +55,10 @@ public class StatusEffectAmplifierMapSettingScreen extends WindowScreen {
     }
 
     private void initTable() {
-        List<MobEffect> statusEffects = new ArrayList<>(setting.get().keySet());
+        List<StatusEffect> statusEffects = new ArrayList<>(setting.get().keySet());
         statusEffects.sort(Comparator.comparing(Names::get));
 
-        for (MobEffect statusEffect : statusEffects) {
+        for (StatusEffect statusEffect : statusEffects) {
             String name = Names.get(statusEffect);
             if (!Strings.CI.contains(name, filterText)) continue;
 
@@ -76,15 +75,15 @@ public class StatusEffectAmplifierMapSettingScreen extends WindowScreen {
         }
     }
 
-    private ItemStack getPotionStack(MobEffect effect) {
-        ItemStack potion = DisplayItemUtils.toStack(Items.POTION);
+    private ItemStack getPotionStack(StatusEffect effect) {
+        ItemStack potion = Items.POTION.getDefaultStack();
 
         potion.set(
-            DataComponents.POTION_CONTENTS,
-            new PotionContents(
-                Optional.empty(),
+            DataComponentTypes.POTION_CONTENTS,
+            new PotionContentsComponent(
+                potion.get(DataComponentTypes.POTION_CONTENTS).potion(),
                 Optional.of(effect.getColor()),
-                List.of(),
+                potion.get(DataComponentTypes.POTION_CONTENTS).customEffects(),
                 Optional.empty()
             )
         );

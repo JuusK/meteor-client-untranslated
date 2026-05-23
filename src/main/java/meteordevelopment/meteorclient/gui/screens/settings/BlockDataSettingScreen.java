@@ -13,14 +13,13 @@ import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.settings.BlockDataSetting;
 import meteordevelopment.meteorclient.settings.IBlockData;
 import meteordevelopment.meteorclient.utils.misc.IChangeable;
-import meteordevelopment.meteorclient.utils.render.DisplayItemUtils;
 import meteordevelopment.meteorclient.utils.misc.ICopyable;
 import meteordevelopment.meteorclient.utils.misc.ISerializable;
 import meteordevelopment.meteorclient.utils.misc.Names;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
+import net.minecraft.block.Block;
+import net.minecraft.block.Blocks;
+import net.minecraft.client.gui.DrawContext;
+import net.minecraft.registry.Registries;
 import org.jetbrains.annotations.Nullable;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
@@ -30,7 +29,7 @@ public class BlockDataSettingScreen<T extends ICopyable<T> & ISerializable<T> & 
     private boolean invalidate;
 
     public BlockDataSettingScreen(GuiTheme theme, BlockDataSetting<T> setting) {
-        super(theme, "Configure Blocks", setting, setting.get(), BuiltInRegistries.BLOCK);
+        super(theme, "Configure Blocks", setting, setting.get(), Registries.BLOCK);
 
         this.setting = setting;
     }
@@ -42,7 +41,7 @@ public class BlockDataSettingScreen<T extends ICopyable<T> & ISerializable<T> & 
 
     @Override
     protected WWidget getValueWidget(Block block) {
-        return theme.itemWithLabel(DisplayItemUtils.toStack(block), Names.get(block));
+        return theme.itemWithLabel(block.asItem().getDefaultStack(), Names.get(block));
     }
 
     @Override
@@ -59,7 +58,7 @@ public class BlockDataSettingScreen<T extends ICopyable<T> & ISerializable<T> & 
     }
 
     @Override
-    protected void onRenderBefore(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+    protected void onRenderBefore(DrawContext drawContext, float delta) {
         if (invalidate) {
             this.invalidateTable();
             invalidate = false;
@@ -70,7 +69,7 @@ public class BlockDataSettingScreen<T extends ICopyable<T> & ISerializable<T> & 
     protected String[] getValueNames(Block block) {
         return new String[]{
             Names.get(block),
-            BuiltInRegistries.BLOCK.getKey(block).toString()
+            Registries.BLOCK.getId(block).toString()
         };
     }
 }

@@ -22,18 +22,18 @@ import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.meteorclient.utils.player.SlotUtils;
 import meteordevelopment.orbit.EventHandler;
 import meteordevelopment.orbit.EventPriority;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.world.food.FoodProperties;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.FoodComponent;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 
 import java.util.List;
 import java.util.function.BiPredicate;
 
 public class AutoEat extends Module {
     @SuppressWarnings("unchecked")
-    private static final Class<? extends Module>[] AURAS = new Class[]{KillAura.class, CrystalAura.class, AnchorAura.class, BedAura.class};
+    private static final Class<? extends Module>[] AURAS = new Class[]{ KillAura.class, CrystalAura.class, AnchorAura.class, BedAura.class };
 
     // Settings groups
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
@@ -54,8 +54,7 @@ public class AutoEat extends Module {
             Items.SPIDER_EYE,
             Items.SUSPICIOUS_STEW
         )
-        .filter(Utils::isFood)
-        .bypassFilterWhenSavingAndLoading()                                                       
+        .filter(item -> item.getComponents().get(DataComponentTypes.FOOD) != null)
         .build()
     );
 
@@ -148,7 +147,7 @@ public class AutoEat extends Module {
             }
 
             // Check if the item in current slot is not food anymore
-            if (!Utils.isFood(mc.player.getInventory().getItem(slot))) {
+            if (mc.player.getInventory().getStack(slot).get(DataComponentTypes.FOOD) == null) {
                 int newSlot = findSlot();
 
                 // Stop if no food found
@@ -231,7 +230,7 @@ public class AutoEat extends Module {
     }
 
     private void setPressed(boolean pressed) {
-        mc.options.keyUse.setDown(pressed);
+        mc.options.useKey.setPressed(pressed);
     }
 
     /**
@@ -264,17 +263,16 @@ public class AutoEat extends Module {
 
     public boolean shouldEat() {
         boolean healthLow = mc.player.getHealth() <= healthThreshold.get();
-        boolean hungerLow = mc.player.getFoodData().getFoodLevel() <= hungerThreshold.get();
+        boolean hungerLow = mc.player.getHungerManager().getFoodLevel() <= hungerThreshold.get();
         if (!thresholdMode.get().test(healthLow, hungerLow)) return false;
 
         slot = findSlot();
         if (slot == -1) return false;
 
-        ItemStack item = mc.player.getInventory().getItem(slot);
-        FoodProperties prop = item.get(DataComponents.FOOD);
-        if (prop == null || !Utils.isFood(item)) return false;
+        FoodComponent food = mc.player.getInventory().getStack(slot).get(DataComponentTypes.FOOD);
+        if (food == null) return false;
 
-        return (mc.player.getFoodData().needsFood() || prop.canAlwaysEat());
+        return (mc.player.getHungerManager().isNotFull() || food.canAlwaysEat());
     }
 
     /**
@@ -283,8 +281,9 @@ public class AutoEat extends Module {
      */
     private int findSlot() {
         // prefer offhand
-        Item offHandItem = mc.player.getOffhandItem().getItem();
-        if (Utils.isFood(offHandItem) && !blacklist.get().contains(offHandItem)) return SlotUtils.OFFHAND;
+        Item offHandItem = mc.player.getOffHandStack().getItem();
+        FoodComponent offHandFood = offHandItem.getComponents().get(DataComponentTypes.FOOD);
+        if (offHandFood != null && !blacklist.get().contains(offHandItem)) return SlotUtils.OFFHAND;
 
         // if offhand empty, prefer best in hotbar
         int slot = findBestFood(SlotUtils.HOTBAR_START, SlotUtils.HOTBAR_END);
@@ -304,9 +303,8 @@ public class AutoEat extends Module {
 
         for (int i = start; i <= end; i++) {
             // Skip if item isn't food
-            ItemStack stack = mc.player.getInventory().getItem(i);
-            FoodProperties food = stack.get(DataComponents.FOOD);
-            if (!Utils.isFood(stack)) continue;
+            ItemStack stack = mc.player.getInventory().getStack(i);
+            FoodComponent food = stack.get(DataComponentTypes.FOOD);
             if (food == null) continue;
 
             // Skip if item is in blacklist
@@ -346,7 +344,7 @@ public class AutoEat extends Module {
         Hunger,
         Saturation;
 
-        public float value(FoodProperties food) {
+        public float value(FoodComponent food) {
             return switch (this) {
                 case Combined -> food.nutrition() + food.saturation();
                 case Hunger -> food.nutrition();

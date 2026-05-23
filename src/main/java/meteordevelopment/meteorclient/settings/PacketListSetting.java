@@ -7,11 +7,11 @@ package meteordevelopment.meteorclient.settings;
 
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import meteordevelopment.meteorclient.utils.network.PacketUtils;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.StringTag;
-import net.minecraft.nbt.Tag;
-import net.minecraft.network.protocol.Packet;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
+import net.minecraft.nbt.NbtList;
+import net.minecraft.nbt.NbtString;
+import net.minecraft.network.packet.Packet;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -44,8 +44,7 @@ public class PacketListSetting extends Setting<Set<Class<? extends Packet<?>>>> 
                 Class<? extends Packet<?>> packet = PacketUtils.getPacket(value.trim());
                 if (packet != null && (filter == null || filter.test(packet))) packets.add(packet);
             }
-        } catch (Exception _) {
-        }
+        } catch (Exception ignored) {}
 
         return packets;
     }
@@ -73,10 +72,10 @@ public class PacketListSetting extends Setting<Set<Class<? extends Packet<?>>>> 
     }
 
     @Override
-    public CompoundTag save(CompoundTag tag) {
-        ListTag valueTag = new ListTag();
+    public NbtCompound save(NbtCompound tag) {
+        NbtList valueTag = new NbtList();
         for (Class<? extends Packet<?>> packet : get()) {
-            valueTag.add(StringTag.valueOf(PacketUtils.getName(packet)));
+            valueTag.add(NbtString.of(PacketUtils.getName(packet)));
         }
         tag.put("value", valueTag);
 
@@ -84,12 +83,12 @@ public class PacketListSetting extends Setting<Set<Class<? extends Packet<?>>>> 
     }
 
     @Override
-    public Set<Class<? extends Packet<?>>> load(CompoundTag tag) {
+    public Set<Class<? extends Packet<?>>> load(NbtCompound tag) {
         get().clear();
 
-        Tag valueTag = tag.get("value");
-        if (valueTag instanceof ListTag listTag) {
-            for (Tag t : listTag) {
+        NbtElement valueTag = tag.get("value");
+        if (valueTag instanceof NbtList) {
+            for (NbtElement t : (NbtList) valueTag) {
                 Class<? extends Packet<?>> packet = PacketUtils.getPacket(t.asString().orElse(""));
                 if (packet != null && (filter == null || filter.test(packet))) get().add(packet);
             }

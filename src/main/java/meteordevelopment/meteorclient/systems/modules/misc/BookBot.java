@@ -18,16 +18,15 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.player.FindItemResult;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.orbit.EventHandler;
-import net.minecraft.ChatFormatting;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.*;
-import net.minecraft.network.protocol.game.ServerboundEditBookPacket;
-import net.minecraft.server.network.Filterable;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.item.component.WritableBookContent;
-import net.minecraft.world.item.component.WrittenBookContent;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.WritableBookContentComponent;
+import net.minecraft.component.type.WrittenBookContentComponent;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.network.packet.c2s.play.BookUpdateC2SPacket;
+import net.minecraft.text.*;
+import net.minecraft.util.Formatting;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryUtil;
@@ -38,7 +37,11 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.PrimitiveIterator;
+import java.util.Random;
 import java.util.function.Predicate;
 
 public class BookBot extends Module {
@@ -182,7 +185,7 @@ public class BookBot extends Module {
     @EventHandler
     private void onTick(TickEvent.Post event) {
         Predicate<ItemStack> bookPredicate = i -> {
-            WritableBookContent component = i.get(DataComponents.WRITABLE_BOOK_CONTENT);
+            WritableBookContentComponent component = i.get(DataComponentTypes.WRITABLE_BOOK_CONTENT);
             return i.getItem() == Items.WRITABLE_BOOK && (component == null || component.pages().isEmpty());
         };
 
@@ -213,10 +216,8 @@ public class BookBot extends Module {
 
         if (mode.get() == Mode.Random) {
             switch (randomType.get()) {
-                case Ascii ->
-                    writeBook(random.ints(0x21, 0x80).filter(i -> !Character.isWhitespace(i) && i != '\r' && i != '\n').iterator());
-                case Utf8 ->
-                    writeBook(random.ints(0x21, 0xD800).filter(i -> !Character.isWhitespace(i) && i != '\r' && i != '\n').iterator());
+                case Ascii -> writeBook(random.ints(0x21, 0x80).filter(i -> !Character.isWhitespace(i) && i != '\r' && i != '\n').iterator());
+                case Utf8 -> writeBook(random.ints(0x21, 0xD800).filter(i -> !Character.isWhitespace(i) && i != '\r' && i != '\n').iterator());
                 case PaperMC -> writePaperMcBook();
             }
         } else if (mode.get() == Mode.File) {
@@ -229,11 +230,11 @@ public class BookBot extends Module {
 
             // Handle the file being empty
             if (file.length() == 0) {
-                MutableComponent message = Component.literal("");
-                message.append(Component.literal("The bookbot file is empty! ").withStyle(ChatFormatting.RED));
-                message.append(Component.literal("Click here to edit it.")
+                MutableText message = Text.literal("");
+                message.append(Text.literal("The bookbot file is empty! ").formatted(Formatting.RED));
+                message.append(Text.literal("Click here to edit it.")
                     .setStyle(Style.EMPTY
-                        .applyFormats(ChatFormatting.UNDERLINE, ChatFormatting.RED)
+                        .withFormatting(Formatting.UNDERLINE, Formatting.RED)
                         .withClickEvent(new ClickEvent.OpenFile(file.getAbsolutePath()))
                     )
                 );
@@ -255,7 +256,7 @@ public class BookBot extends Module {
 
                 // Write the file string to a book
                 writeBook(file.toString().chars().iterator());
-            } catch (IOException _) {
+            } catch (IOException ignored) {
                 error("Failed to read the file.");
             }
         }
@@ -263,7 +264,7 @@ public class BookBot extends Module {
 
     private void writeBook(PrimitiveIterator.OfInt chars) {
         ArrayList<String> pages = new ArrayList<>();
-        ArrayList<Filterable<Component>> filteredPages = new ArrayList<>();
+        ArrayList<RawFilteredPair<Text>> filteredPages = new ArrayList<>();
         int maxPages = mode.get() == Mode.File ? 100 : this.pages.get();
 
         if (wordWrap.get() && mode.get() == Mode.File) {
@@ -273,7 +274,7 @@ public class BookBot extends Module {
             }
 
             // Use mc's own word wrapping logic
-            List<FormattedText> wrappedLines = mc.font.splitIgnoringLanguage(Component.literal(text.toString()), 114);
+            List<StringVisitable> wrappedLines = mc.textRenderer.wrapLinesWithoutLanguage(Text.literal(text.toString()), 114);
             processLinesToPages(wrappedLines, pages, filteredPages, maxPages);
         } else {
             int pageIndex = 0;
@@ -286,7 +287,7 @@ public class BookBot extends Module {
 
                 if (!page.isEmpty()) {
                     String builtPage = page.toString();
-                    filteredPages.add(Filterable.passThrough(Component.nullToEmpty(builtPage)));
+                    filteredPages.add(RawFilteredPair.of(Text.of(builtPage)));
                     pages.add(builtPage);
                     page.setLength(0);
                 }
@@ -303,7 +304,7 @@ public class BookBot extends Module {
      */
     private void writePaperMcBook() {
         ArrayList<String> pages = new ArrayList<>();
-        ArrayList<Filterable<Component>> filteredPages = new ArrayList<>();
+        ArrayList<RawFilteredPair<Text>> filteredPages = new ArrayList<>();
         final StringBuilder page = new StringBuilder();
 
         PrimitiveIterator.OfInt oneByte = random.ints(0x21, 0x80).iterator();
@@ -331,7 +332,7 @@ public class BookBot extends Module {
             }
 
             String builtPage = page.toString();
-            filteredPages.add(Filterable.passThrough(Component.nullToEmpty(builtPage)));
+            filteredPages.add(RawFilteredPair.of(Text.of(builtPage)));
             pages.add(builtPage);
             page.setLength(0);
         }
@@ -339,12 +340,12 @@ public class BookBot extends Module {
         createBook(pages, filteredPages);
     }
 
-    private void processLinesToPages(List<FormattedText> lines, ArrayList<String> pages, ArrayList<Filterable<Component>> filteredPages, int maxPages) {
+    private void processLinesToPages(List<StringVisitable> lines, ArrayList<String> pages, ArrayList<RawFilteredPair<Text>> filteredPages, int maxPages) {
         int pageIndex = 0;
         int lineIndex = 0;
         StringBuilder currentPage = new StringBuilder();
 
-        for (FormattedText line : lines) {
+        for (StringVisitable line : lines) {
             String lineText = line.getString();
 
             if (!currentPage.isEmpty()) {
@@ -354,7 +355,7 @@ public class BookBot extends Module {
             lineIndex++;
 
             if (lineIndex == 14) {
-                filteredPages.add(Filterable.passThrough(Component.nullToEmpty(currentPage.toString())));
+                filteredPages.add(RawFilteredPair.of(Text.of(currentPage.toString())));
                 pages.add(currentPage.toString());
                 currentPage.setLength(0);
                 pageIndex++;
@@ -365,28 +366,28 @@ public class BookBot extends Module {
         }
 
         if (!currentPage.isEmpty() && pageIndex < maxPages) {
-            filteredPages.add(Filterable.passThrough(Component.nullToEmpty(currentPage.toString())));
+            filteredPages.add(RawFilteredPair.of(Text.of(currentPage.toString())));
             pages.add(currentPage.toString());
         }
     }
 
-    private void createBook(ArrayList<String> pages, ArrayList<Filterable<Component>> filteredPages) {
+    private void createBook(ArrayList<String> pages, ArrayList<RawFilteredPair<Text>> filteredPages) {
         // Get the title with count
         String title = name.get();
         if (count.get() && bookCount != 0) title += " #" + bookCount;
 
         // Write data to book
-        mc.player.getMainHandItem().set(DataComponents.WRITTEN_BOOK_CONTENT, new WrittenBookContent(Filterable.passThrough(title), mc.player.getGameProfile().name(), 0, filteredPages, true));
+        mc.player.getMainHandStack().set(DataComponentTypes.WRITTEN_BOOK_CONTENT, new WrittenBookContentComponent(RawFilteredPair.of(title), mc.player.getGameProfile().name(), 0, filteredPages, true));
 
         // Send book update to server
-        mc.player.connection.send(new ServerboundEditBookPacket(mc.player.getInventory().getSelectedSlot(), pages, sign.get() ? Optional.of(title) : Optional.empty()));
+        mc.player.networkHandler.sendPacket(new BookUpdateC2SPacket(mc.player.getInventory().getSelectedSlot(), pages, sign.get() ? Optional.of(title) : Optional.empty()));
 
         bookCount++;
     }
 
     @Override
-    public CompoundTag toTag() {
-        CompoundTag tag = super.toTag();
+    public NbtCompound toTag() {
+        NbtCompound tag = super.toTag();
 
         if (file != null && file.exists()) {
             tag.putString("file", file.getAbsolutePath());
@@ -396,9 +397,9 @@ public class BookBot extends Module {
     }
 
     @Override
-    public Module fromTag(CompoundTag tag) {
+    public Module fromTag(NbtCompound tag) {
         if (tag.contains("file")) {
-            file = new File(tag.getStringOr("file", ""));
+            file = new File(tag.getString("file", ""));
         }
 
         return super.fromTag(tag);
